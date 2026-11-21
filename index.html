@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Clock Will Strike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=IM+Fell+English:ital@0;1&family=Raleway:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: quiet, unexplained, a surface you walk rather than a gallery you visit
+IDEA: a blank sheet on which a map of five places draws itself from the viewer's route
+PICTURE: the photographs, coming into focus, and the one network of lines that is awake
+COLOUR and TYPE: white ground, black ink, near-black for looking closely; EB Garamond, the title in IM Fell English
+LAYOUT: one large field in both directions, a threshold, three small links in a corner
+*/
+:root{color-scheme:light;--ground:#fff;--ink:#1d1d1b;--mute:#8a8984}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ground);color:var(--ink);
+  font:16px/1.55 "EB Garamond",Garamond,"Times New Roman",serif;overflow:hidden}
+#scroller{position:fixed;inset:0;overflow:auto;cursor:grab;overscroll-behavior:none;opacity:0;transition:opacity 2.5s ease}
+body.in #scroller{opacity:1}
+#scroller.dragging{cursor:grabbing}
+#sizer{position:relative}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;background:var(--ground)}
+#lines,#labels{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+#labels{z-index:3}
+[data-locs]{opacity:.07;transition:opacity 1.4s ease,stroke-dashoffset 1.8s ease}
+[data-locs].act{opacity:.75}
+#world.ov [data-locs]{opacity:.5}
+circle[data-locs]{opacity:.07}circle[data-locs].act{opacity:.85}#world.ov circle[data-locs]{opacity:.6}
+.ph{position:absolute;display:block;user-select:none;-webkit-user-drag:none;
+  opacity:calc(.06 + .5 * var(--p,0));filter:blur(calc(7px - 7px * var(--p,0))) grayscale(1);
+  transition:opacity .25s linear,filter .25s linear,transform .6s ease}
+.ph.found{opacity:1;filter:none;cursor:zoom-in;transition:opacity 1.6s ease,filter 1.6s ease,transform .6s ease}
+.ph.found.side{opacity:.3;filter:blur(1.2px);transition:opacity 1.2s ease,filter 1.2s ease}
+.ph.found.mem{opacity:.18;filter:blur(2px);transition:opacity 6s ease,filter 6s ease}
+#world.dim .ph.found:not(.pulse){opacity:.22}
+.ph.pulse{transform:scale(1.03);z-index:2;opacity:1!important;filter:none!important}
+.loc{fill:var(--ink);font:500 calc(17px / var(--s,1)) "EB Garamond",Garamond,serif;letter-spacing:.3em;text-transform:uppercase;
+  paint-order:stroke;stroke:var(--ground);stroke-width:calc(7px / var(--s,1));stroke-linejoin:round;opacity:0;transition:opacity 2.5s ease}
+.loc.on{opacity:.3}.loc.on.act{opacity:.8}
+#world.ov .loc.on{opacity:.8}
+#world.ov .ph.found.mem,#world.ov .ph.found.side{opacity:1;filter:none}
+#world.ov .ph:not(.found){opacity:.035}
+#gate{position:fixed;inset:0;display:grid;place-items:center;z-index:6;background:var(--ground);transition:opacity 2s ease}
+body.in #gate{opacity:0;pointer-events:none}
+#enter{border:0;background:none;font:italic 19px "EB Garamond",Garamond,serif;color:var(--ink);letter-spacing:.06em;cursor:pointer;padding:14px 22px}
+#title{position:fixed;left:20px;top:12px;z-index:7;pointer-events:none;font:400 24px/1.2 "IM Fell English","EB Garamond",Garamond,serif;letter-spacing:.01em;color:rgba(0,0,0,.85)}
+#menu{position:fixed;left:12px;bottom:10px;z-index:7;display:flex;gap:2px;flex-wrap:wrap}
+#menu button,#ov{min-height:36px;padding:0 8px;border:0;background:none;font:inherit;color:var(--mute);cursor:pointer}
+#menu button:hover,#ov:hover{color:var(--ink)}
+#title,#menu button,#ov{transition:color .6s ease,opacity 2.5s ease}
+#title.pale,#menu button.pale,#ov.pale{color:rgba(255,255,255,.92)}
+#ov{position:fixed;right:10px;bottom:10px;z-index:7;opacity:0;pointer-events:none}
+#ov{transition:opacity 2.5s ease}
+body.in.mapped #ov{opacity:1;pointer-events:auto}
+button:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+#panel{position:fixed;inset:0;z-index:8;background:rgba(255,255,255,.97);display:none;overflow:auto;padding:12vh max(6vw,18px) 10vh}
+#panel.on{display:block}
+#panel article{max-width:60ch;margin:0 auto;font-size:19px;line-height:1.6}
+#panel h2{font:400 26px/1.2 "IM Fell English","EB Garamond",Garamond,serif;color:rgba(0,0,0,.85);margin:0 0 1.2em}
+#panel .ph-note{color:var(--mute);font-size:15px}
+#panel a{color:inherit;text-decoration-thickness:1px;text-underline-offset:3px}
+#panel blockquote{margin:1.6em 0;padding-left:1.2em;border-left:1px solid #ccc}
+#close{position:fixed;right:14px;top:10px;min-height:36px;border:0;background:none;font:inherit;color:var(--mute);cursor:pointer}
+#box{position:fixed;inset:0;z-index:9;display:none;place-items:center;background:#141413;cursor:zoom-out}
+#box.on{display:grid}
+#box img{max-width:96vw;max-height:94vh;object-fit:contain}
+#box span{position:fixed;left:20px;bottom:12px;color:#8a8984;font-size:15px;letter-spacing:.24em;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.ph.pulse{transform:none}}
+</style>
+</head>
+<body>
+<div id="scroller"><div id="sizer"><div id="world"><svg id="lines"></svg><svg id="labels"></svg></div></div></div>
+<div id="gate"><button id="enter" type="button">enter</button></div>
+<div id="title">The Clock Will Strike</div>
+<nav id="menu"><button type="button" data-p="info">info</button><button type="button" data-p="texts">texts</button><button type="button" id="snd">sound: off</button></nav>
+<button id="ov" type="button">whole wall</button>
+<div id="panel" role="dialog" aria-modal="true"><button id="close" type="button">close</button><article></article></div>
+<div id="box"><img alt=""><span></span></div>
+
+<template id="t-info">
+  <h2>The Clock Will Strike</h2>
+  <p>In Karl Ove Knausgaard’s ‘The School of Night’, Kristian Hadeland, a Norwegian photography student in London in 1985, is asked to photograph the places connected with Christopher Marlowe for the poster of a fringe performance of ‘Doctor Faustus’. He makes the pictures but too late for the poster.</p>
+  <p>These photographs retrace his imagined route through Deptford, Shoreditch, Newgate, Southwark and Scadbury. The title comes from Faustus’s last speech, as his final hour runs out.</p>
+  <p>This investigation began with the notion of the Terrain Vague, borrowed from <a href="https://ianwalkerphoto.com/surrealism/in-paris/man-ray/terrain-vague/">Man Ray’s photograph</a> and from the architect Ignasi de Solà-Morales, whose 1995 essay of that title used the French phrase for the city’s leftover ground: empty lots, margins and places that have fallen out of use. He began from the photographers who had found these places before the architects did, and he dwelt on the word itself. Vague carries the sense of vacant (free and available) and also the sense of uncertain and unbounded. The wall is meant to be that kind of ground, mostly empty, with no edges marked and nothing telling you where to go.</p>
+  <p>The way you cross it comes from the dérive, the drift Guy Debord described in 1956: a walk in which you drop your usual reasons for going anywhere and let the terrain, and whatever you meet there, draw you on. A year later Debord and Asger Jorn cut up a map of Paris and reassembled the pieces, joined by curving arrows, as The Naked City, a map made from how the city felt to walk through, with the distances left out. The lines that form here belong to that kind of map.</p>
+  <p>Move slowly. A picture comes into focus only when you stand still in front of it, and fades if you leave it for long. Pictures from the same place are joined as you find them, in the order you find them, so no two visits make the same map. Once a few connections have formed, you can step back and see the whole wall.</p>
+</template>
+<template id="t-texts">
+  <h2>Texts</h2>
+  <blockquote>The Old Bailey, Shoreditch, Southwark, Chislehurst, Deptford. These were Marlowe’s London places. I could cover them all in a week.<br><span class="ph-note">Kristian, p. 203</span></blockquote>
+  <blockquote>… the connection between Marlowe and his London localities was by the nature of things not visually apparent …<br><span class="ph-note">Kristian, p. 301</span></blockquote>
+  <blockquote>Hell hath no limits, nor is circumscribed<br>In one self place, for where we are is hell,<br>And where hell is, must we ever be.<br><span class="ph-note">Mephistopheles</span></blockquote>
+  <blockquote>Only time separated us. Only time? Surely there was no greater divide! Even a minute was an abyss.<br><span class="ph-note">Kristian, p. 303</span></blockquote>
+  <blockquote>O lente, lente currite noctis equi!<br><span class="ph-note">Faustus in his last hour, borrowing from Ovid: run slowly, slowly, horses of the night</span></blockquote>
+  <blockquote>‘I’m afraid you’re too late.’<br><span class="ph-note">Kristian, p. 306</span></blockquote>
+  <blockquote>The stars move still, time runs, the clock will strike,<br>The devil will come, and Faustus must be damned.<br><span class="ph-note">Faustus</span></blockquote>
+  <blockquote>He must have walked these streets, Marlowe.<br><span class="ph-note">Kristian, p. 330</span></blockquote>
+  <blockquote>Cut is the branch that might have grown full straight,<br>And burnèd is Apollo’s laurel bough.<br><span class="ph-note">The Chorus, at the end of the play</span></blockquote>
+  <p class="ph-note">Karl Ove Knausgaard, <i>The School of Night</i>, translated by Martin Aitken. Christopher Marlowe, <i>Doctor Faustus</i>, spelling modernised.</p>
+</template>
+
+<script>
+{
+const DATA=[["deptford-1262-05","Deptford",1.252],["deptford-1262-06","Deptford",1.252],["deptford-1262-08","Deptford",1.252],["deptford-1262-09","Deptford",1.252],["deptford-8891-01","Deptford",1.252],["deptford-8891-02","Deptford",1.252],["deptford-8891-03","Deptford",1.252],["deptford-8891-05","Deptford",1.252],["deptford-8891-07","Deptford",0.801],["deptford-8891-08","Deptford",1.252],["deptford-8892-01","Deptford",0.8],["deptford-8892-02","Deptford",1.252],["deptford-8892-04","Deptford",1.252],["deptford-8892-05","Deptford",1.252],["deptford-8892-07","Deptford",1.252],["deptford-8892-08","Deptford",1.252],["shoreditch-8930-02","Shoreditch",0.8],["shoreditch-8930-04","Shoreditch",1.252],["shoreditch-8930-07","Shoreditch",0.798],["shoreditch-8931-02","Shoreditch",1.252],["shoreditch-8931-03","Shoreditch",0.801],["shoreditch-8931-07","Shoreditch",1.252],["shoreditch-8931-08","Shoreditch",1.252],["shoreditch-8931-09","Shoreditch",1.252],["shoreditch-8931-10","Shoreditch",0.8],["scadbury-0261-01","Scadbury",0.8],["scadbury-0261-02","Scadbury",0.8],["scadbury-0261-03","Scadbury",1.252],["scadbury-0261-04","Scadbury",1.252],["scadbury-0261-06","Scadbury",1.252],["scadbury-0261-07","Scadbury",0.8],["scadbury-0261-08","Scadbury",0.8],["scadbury-0261-10","Scadbury",1.252],["southwark-8930-08","Southwark",1.252],["southwark-8930-09","Southwark",1.252],["newgate-8930-05","Newgate",0.8],["newgate-8930-06","Newgate",1.252]];
+const START="scadbury-0261-03";       // the worn-away map
+const HINGE=new Set(["shoreditch-8930-02","shoreditch-8930-04","shoreditch-8930-07"]);  // Worship Street, once Hog Lane
+const vw0=Math.min(innerWidth,1600),vh0=Math.min(innerHeight,1000);
+// the wall grows with the screen, so the margin that lets every picture be centred never crowds the pictures
+const W=Math.round(6000+vw0),H=Math.round(4000+vh0),PAD=150,DWELL=900,REDWELL=350,FORGET=14000,SLOW=0.35;
+const NS="http://www.w3.org/2000/svg";
+const $=id=>document.getElementById(id);
+const sc=$('scroller'),sizer=$('sizer'),world=$('world'),lines=$('lines'),labels=$('labels'),box=$('box');
+world.style.width=W+'px';world.style.height=H+'px';sizer.style.width=W+'px';sizer.style.height=H+'px';
+for(const s of[lines,labels])s.setAttribute('viewBox',`0 0 ${W} ${H}`);
+
+// placement: new every visit, in both directions
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const items=DATA.map(([f,loc,r])=>({f,loc,r}));
+const placed=[];
+const hits=(x,y,w,h)=>placed.some(o=>x<o.x+o.w+PAD&&x+w+PAD>o.x&&y<o.y+o.h+PAD&&y+h+PAD>o.y);
+const start=items.find(i=>i.f===START);
+start.w=Math.min(620,vw0*.5);start.h=start.w/start.r;
+start.x=Math.round(W*rnd(.38,.55)-start.w/2);start.y=Math.round(H*rnd(.4,.55)-start.h/2);
+placed.push(start);
+placed.push({x:start.x+start.w/2-vw0/2-40,y:start.y+start.h/2-vh0/2-40,w:vw0+80,h:vh0+80});
+for(const it of items){
+  if(it===start)continue;
+  const t=Math.random();
+  let L=t<.18?rnd(640,780):t<.55?rnd(430,540):rnd(280,350);
+  for(let k=0;k<12000;k++){
+    if(k&&k%1500===0)L*=.9;
+    it.w=it.r>=1?L:L*it.r;it.h=it.r>=1?L/it.r:L;
+    // keep every picture far enough from the wall's edges that the view can be centred on it
+    const ex=Math.max(80,vw0/2-it.w/2),ey=Math.max(80,vh0/2-it.h/2);
+    const x=rnd(ex,W-it.w-ex),y=rnd(ey,H-it.h-ey);
+    if(!hits(x,y,it.w,it.h)){it.x=x;it.y=y;break}
+  }
+  if(it.x==null){const ex=Math.max(80,vw0/2-it.w/2),ey=Math.max(80,vh0/2-it.h/2);it.x=rnd(ex,W-it.w-ex);it.y=rnd(ey,H-it.h-ey)}
+  placed.push(it);
+}
+const groups={};
+for(const it of items){
+  (groups[it.loc]??=[]).push(it);
+  const im=document.createElement('img');
+  im.addEventListener('load',()=>{try{
+    const gw=40,gh=Math.max(1,Math.round(40/it.r)),c=document.createElement('canvas');c.width=gw;c.height=gh;
+    const g=c.getContext('2d');g.drawImage(im,0,0,gw,gh);const d=g.getImageData(0,0,gw,gh).data,L=new Float32Array(gw*gh);
+    for(let i=0;i<gw*gh;i++)L[i]=(.2126*d[i*4]+.7152*d[i*4+1]+.0722*d[i*4+2])/255;
+    it.lum={gw,gh,L};}catch(e){}});
+  im.src='img/'+it.f+'.jpg';im.alt=it.loc+' '+it.f.slice(-7);im.className='ph';im.draggable=false;
+  Object.assign(im.style,{left:it.x+'px',top:it.y+'px',width:it.w+'px',height:it.h+'px'});
+  Object.assign(it,{el:im,cx:it.x+it.w/2,cy:it.y+it.h/2,dwell:0,seen:0,away:0,found:false});
+  im.addEventListener('click',()=>{if(!moved&&it.found)openBox(it)});
+  world.insertBefore(im,labels);
+}
+
+// lines: only the network of the place you are in is awake
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let active=null,links=0;
+// Lines bend around pictures, like Debord's arrows, so a line only ever disappears into the two pictures it joins.
+// A small dot marks where it meets each of them.
+const inside=(o,x,y,m=0)=>x>o.x-m&&x<o.x+o.w+m&&y>o.y-m&&y<o.y+o.h+m;
+const bez=(P,t)=>{let q=P;while(q.length>1){const r=[];for(let i=0;i<q.length-1;i++)r.push([q[i][0]+(q[i+1][0]-q[i][0])*t,q[i][1]+(q[i+1][1]-q[i][1])*t]);q=r}return q[0]};
+// When no simple curve is clear, the line finds its own way through the empty ground (A* on a coarse grid).
+function route(a,b){
+  const C=40,gw=Math.ceil(W/C),gh=Math.ceil(H/C),blk=new Uint8Array(gw*gh),m=34;
+  for(const o of items){if(o===a||o===b)continue;
+    for(let gy=Math.max(0,Math.floor((o.y-m)/C));gy<=Math.min(gh-1,Math.floor((o.y+o.h+m)/C));gy++)
+      for(let gx=Math.max(0,Math.floor((o.x-m)/C));gx<=Math.min(gw-1,Math.floor((o.x+o.w+m)/C));gx++)blk[gy*gw+gx]=1}
+  const cell=(x,y)=>[Math.min(gw-1,Math.max(0,Math.floor(x/C))),Math.min(gh-1,Math.max(0,Math.floor(y/C)))];
+  const[sx,sy]=cell(a.cx,a.cy),[tx,ty]=cell(b.cx,b.cy),S=sy*gw+sx,T=ty*gw+tx;
+  blk[S]=0;blk[T]=0;
+  const g=new Float32Array(gw*gh).fill(Infinity),from=new Int32Array(gw*gh).fill(-1),done=new Uint8Array(gw*gh);
+  const heap=[];const push=(f,i)=>{heap.push([f,i]);let k=heap.length-1;while(k){const p=(k-1)>>1;if(heap[p][0]<=heap[k][0])break;[heap[p],heap[k]]=[heap[k],heap[p]];k=p}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let k=0;for(;;){const l=2*k+1,r=l+1;let s=k;if(l<heap.length&&heap[l][0]<heap[s][0])s=l;if(r<heap.length&&heap[r][0]<heap[s][0])s=r;if(s===k)break;[heap[s],heap[k]]=[heap[k],heap[s]];k=s}}return top};
+  const h=i=>{const dx=Math.abs(i%gw-tx),dy=Math.abs((i/gw|0)-ty);return Math.max(dx,dy)+.414*Math.min(dx,dy)};
+  g[S]=0;push(h(S),S);
+  while(heap.length){const[,i]=pop();if(done[i])continue;done[i]=1;if(i===T)break;
+    const x=i%gw,y=i/gw|0;
+    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){if(!ox&&!oy)continue;const nx=x+ox,ny=y+oy;
+      if(nx<0||ny<0||nx>=gw||ny>=gh)continue;const j=ny*gw+nx;if(blk[j]||done[j])continue;
+      if(ox&&oy&&(blk[y*gw+nx]||blk[ny*gw+x]))continue;
+      const ng=g[i]+(ox&&oy?1.414:1);if(ng<g[j]){g[j]=ng;from[j]=i;push(ng+h(j),j)}}}
+  if(from[T]<0&&T!==S)return null;
+  let cells=[];for(let i=T;i!==-1;i=from[i])cells.push(i);cells.reverse();
+  const P=cells.map(i=>[(i%gw+.5)*C,((i/gw|0)+.5)*C]);P[0]=[a.cx,a.cy];P[P.length-1]=[b.cx,b.cy];
+  // pull the string tight: keep only the turns that are needed
+  const clear=(p,q)=>{const n=Math.ceil(Math.hypot(q[0]-p[0],q[1]-p[1])/(C/3));for(let k=1;k<n;k++){const[gx,gy]=cell(p[0]+(q[0]-p[0])*k/n,p[1]+(q[1]-p[1])*k/n);if(blk[gy*gw+gx])return false}return true};
+  const way=[P[0]];let i=0;while(i<P.length-1){let j=P.length-1;while(j>i+1&&!clear(P[i],P[j]))j--;way.push(P[j]);i=j}
+  // a soft curve through the turns; if smoothing cuts a corner into a picture, keep the straight turns
+  const cr=[];const Q=[way[0],...way,way[way.length-1]];
+  for(let k=1;k<Q.length-2;k++){const[p0,p1,p2,p3]=[Q[k-1],Q[k],Q[k+1],Q[k+2]];
+    const n=Math.max(8,Math.ceil(Math.hypot(p2[0]-p1[0],p2[1]-p1[1])/12));
+    for(let t=0;t<n;t++){const u=t/n,u2=u*u,u3=u2*u;
+      cr.push([0,1].map(d=>.5*(2*p1[d]+(-p0[d]+p2[d])*u+(2*p0[d]-5*p1[d]+4*p2[d]-p3[d])*u2+(-p0[d]+3*p1[d]-3*p2[d]+p3[d])*u3)))}}
+  cr.push(way[way.length-1]);
+  const others=items.filter(o=>o!==a&&o!==b);
+  if(!cr.some(([x,y])=>others.some(o=>inside(o,x,y,6))))return cr;
+  const poly=[];for(let k=0;k<way.length-1;k++){const p=way[k],q=way[k+1],n=Math.max(2,Math.ceil(Math.hypot(q[0]-p[0],q[1]-p[1])/12));for(let t=0;t<n;t++)poly.push([p[0]+(q[0]-p[0])*t/n,p[1]+(q[1]-p[1])*t/n])}
+  poly.push(way[way.length-1]);return poly;
+}
+function line(a,b,locs,dash){
+  const dx=b.cx-a.cx,dy=b.cy-a.cy,len=Math.hypot(dx,dy),nx=-dy/len,ny=dx/len,A=[a.cx,a.cy],B=[b.cx,b.cy];
+  const others=items.filter(o=>o!==a&&o!==b);
+  const at=(u,k)=>[a.cx+dx*u+nx*k*len,a.cy+dy*u+ny*k*len];
+  const ok=c=>c[0]>0&&c[0]<W&&c[1]>0&&c[1]<H;
+  const score=P=>{let n=0;for(let i=1;i<120;i++){const[x,y]=bez(P,i/120);if(x<0||x>W||y<0||y>H||others.some(o=>inside(o,x,y,22)))n++}return n};
+  let best=null;
+  const opts=[];
+  for(let k=0;k<=1.6;k+=.08)for(const u of[.5,.3,.7,.15,.85])for(const sg of k?[1,-1]:[1])opts.push([k*sg,u]);
+  opts.sort((p,q)=>Math.abs(p[0])-Math.abs(q[0]));
+  for(const[k,u]of opts){const c=at(u,k);if(!ok(c))continue;const P=[A,c,B],n=score(P);
+    if(!best||n<best.n)best={n,P};if(n===0)break}
+  if(best.n>0)search:for(let k1=-1.4;k1<=1.4;k1+=.2)for(let k2=-1.4;k2<=1.4;k2+=.2){
+    const c1=at(.3,k1),c2=at(.7,k2);if(!ok(c1)||!ok(c2))continue;const P=[A,c1,c2,B],n=score(P);
+    if(n<best.n)best={n,P};if(n===0)break search}
+  let pts=null;
+  if(best.n>0)pts=route(a,b);
+  if(!pts){pts=[];for(let i=0;i<=400;i++)pts.push(bez(best.P,i/400))}
+  // the line stops where it leaves one picture and meets the other
+  let i0=0;while(i0<pts.length-1&&inside(a,...pts[i0]))i0++;
+  let i1=pts.length-1;while(i1>i0&&inside(b,...pts[i1]))i1--;
+  const S=pts.slice(i0,i1+1);
+  const l=document.createElementNS(NS,'path');
+  l.setAttribute('d','M'+S.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L'));
+  for(const[k,v]of Object.entries({fill:'none',stroke:'#1d1d1b','stroke-width':1.2,'stroke-linejoin':'round','vector-effect':'non-scaling-stroke'}))l.setAttribute(k,v);
+  l.dataset.locs=locs.join(' ');
+  lines.appendChild(l);
+  if(dash)l.setAttribute('stroke-dasharray',dash);
+  else if(!reduce){const L=l.getTotalLength();
+    l.setAttribute('stroke-dasharray',L);l.setAttribute('stroke-dashoffset',L);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>l.setAttribute('stroke-dashoffset',0)));}
+  for(const[x,y]of[S[0],S[S.length-1]]){
+    const d=document.createElementNS(NS,'circle');
+    d.setAttribute('cx',x);d.setAttribute('cy',y);d.setAttribute('r',4);d.setAttribute('fill','#1d1d1b');
+    d.dataset.locs=locs.join(' ');labels.appendChild(d);
+  }
+  if(++links>=3)document.body.classList.add('mapped');
+  setActive(locs[locs.length-1]);
+}
+function setActive(loc){
+  active=loc;
+  for(const l of world.querySelectorAll('[data-locs]'))l.classList.toggle('act',l.dataset.locs.split(' ').includes(loc));
+  for(const t of labels.querySelectorAll('text'))t.classList.toggle('act',t.dataset.loc===loc);
+}
+// names: placed in the nearest clear ground to the group's centre, above the pictures
+// a place's name appears beside the picture that completed it, where the viewer was standing
+function name(loc,at){
+  const cx=at.cx,cy=at.cy;
+  const tw=loc.length*18+24,th=32;
+  let px=cx,py=at.y+at.h+40;
+  const order=[4,3,5,12,11,13,0,8,2,6,10,14,1,7,9,15];
+  search:for(let r=Math.min(at.w,at.h)/2;r<2400;r+=40)for(const a of order){
+    const x=cx+r*Math.cos(a*Math.PI/8),y=cy+r*Math.sin(a*Math.PI/8);
+    if(x-tw/2<20||x+tw/2>W-20||y-th<20||y>H-20)continue;
+    if(!items.some(o=>x+tw/2>o.x-16&&x-tw/2<o.x+o.w+16&&y>o.y-16&&y-th<o.y+o.h+16)){px=x;py=y;break search}
+  }
+  const t=document.createElementNS(NS,'text');
+  t.setAttribute('x',px);t.setAttribute('y',py);t.setAttribute('text-anchor','middle');
+  t.setAttribute('class','loc');t.dataset.loc=loc;t.textContent=loc;labels.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{t.classList.add('on');t.classList.toggle('act',active===loc)}));
+}
+const lastBy={};let hingeDone=false,dimT;
+function pulse(a,b){
+  if(reduce)return;
+  a.el.classList.add('pulse');b.el.classList.add('pulse');world.classList.add('dim');
+  clearTimeout(dimT);
+  dimT=setTimeout(()=>{world.classList.remove('dim');for(const i of items)i.el.classList.remove('pulse')},1700);
+}
+function find(it){
+  it.found=true;it.el.classList.add('found');it.el.style.removeProperty('--p');
+  const prev=lastBy[it.loc];lastBy[it.loc]=it;
+  if(prev){line(prev,it,[it.loc]);pulse(prev,it)}else setActive(it.loc);
+  // one dashed line, from whichever Worship Street picture lies nearest a Newgate picture
+  const ng=groups.Newgate,ws=items.filter(i=>HINGE.has(i.f)&&i.found);
+  if(!hingeDone&&ws.length&&ng.every(i=>i.found)){
+    hingeDone=true;
+    let best=null;
+    for(const w of ws)for(const n of ng){const d=Math.hypot(w.cx-n.cx,w.cy-n.cy);if(!best||d<best.d)best={w,n,d}}
+    line(best.w,best.n,['Shoreditch','Newgate'],'5 6');
+  }
+  if(groups[it.loc].every(i=>i.found))name(it.loc,it);
+}
+
+// walking: stillness brings pictures into focus; pictures you leave behind slowly fade
+let px=0,py=0,pt=0,speed=0,overview=false,live=false;
+function tick(now){
+  const dt=Math.min(now-pt,100);pt=now;
+  const x=sc.scrollLeft,y=sc.scrollTop,vw=sc.clientWidth,vh=sc.clientHeight;
+  const v=Math.hypot(x-px,y-py)/Math.max(dt,1);px=x;py=y;speed=speed*.8+v*.2;
+  const still=speed<SLOW&&!dragging;
+  if(live&&!overview){
+    // only the picture at the centre of the view can come into focus
+    // (the nearest of the pictures mostly in view, so pictures at the wall's edges can be reached too)
+    const mx=x+vw/2,my=y+vh/2;let central=null,cd=1e9;
+    for(const it of items){
+      const ix=Math.max(0,Math.min(it.x+it.w,x+vw)-Math.max(it.x,x)),iy=Math.max(0,Math.min(it.y+it.h,y+vh)-Math.max(it.y,y));
+      it.frac=ix*iy/Math.min(it.w*it.h,vw*vh*.9);
+      if(it.frac>.5){const d=Math.hypot(it.cx-mx,it.cy-my);if(d<cd){cd=d;central=it}}
+    }
+    for(const it of items){
+    const frac=it.frac;
+    const isC=it===central;
+    if(!it.found){
+      if(isC&&frac>.5&&still)it.dwell+=dt;else it.dwell=Math.max(0,it.dwell-dt*2);
+      it.el.style.setProperty('--p',(isC?Math.min(1,it.dwell/DWELL):0).toFixed(3));
+      if(it.dwell>=DWELL)find(it);
+    }else{
+      it.el.classList.toggle('side',!isC);
+      if(frac<.05){it.away+=dt;it.seen=0;if(it.away>FORGET)it.el.classList.add('mem')}
+      else{it.away=0;
+        if(isC&&still){it.seen+=dt;
+          if(it.seen>REDWELL){it.el.classList.remove('mem');if(active!==it.loc)setActive(it.loc)}}
+        else it.seen=0;}
+    }
+    }
+  }
+
+  if(now-chromeT>160){chromeT=now;chrome();placeSound()}
+  requestAnimationFrame(tick);
+}
+// title and links turn pale where a dark part of a picture lies beneath them
+let chromeT=0,scale=1;
+const chromeEls=[$('title'),...document.querySelectorAll('#menu button'),$('ov')];
+function chrome(){
+  const ox=sc.scrollLeft,oy=sc.scrollTop;
+  for(const el of chromeEls){
+    const r=el.getBoundingClientRect();
+    if(!r.width){el.classList.remove('pale');continue}
+    const x0=(ox+r.left)/scale,y0=(oy+r.top)/scale,x1=(ox+r.right)/scale,y1=(oy+r.bottom)/scale;
+    let best=0,lum=1;
+    for(const it of items){
+      if(!it.found||!it.lum)continue;
+      const ix=Math.min(x1,it.x+it.w)-Math.max(x0,it.x),iy=Math.min(y1,it.y+it.h)-Math.max(y0,it.y);
+      if(ix<=0||iy<=0)continue;
+      const cover=ix*iy/((x1-x0)*(y1-y0));if(cover<=best)continue;
+      const{gw,gh,L}=it.lum;
+      const cx0=Math.max(0,Math.floor((Math.max(x0,it.x)-it.x)/it.w*gw)),cx1=Math.min(gw-1,Math.floor((Math.min(x1,it.x+it.w)-it.x)/it.w*gw));
+      const cy0=Math.max(0,Math.floor((Math.max(y0,it.y)-it.y)/it.h*gh)),cy1=Math.min(gh-1,Math.floor((Math.min(y1,it.y+it.h)-it.y)/it.h*gh));
+      let sum=0,n=0;for(let y=cy0;y<=cy1;y++)for(let x=cx0;x<=cx1;x++){sum+=L[y*gw+x];n++}
+      let v=n?sum/n:1;
+      if(it.el.classList.contains('mem'))v=1-.18*(1-v);else if(it.el.classList.contains('side'))v=1-.3*(1-v);
+      v=v*cover+1*(1-cover);   // the uncovered part of the text sits on white
+      best=cover;lum=v;
+    }
+    el.classList.toggle('pale',lum<.5);
+  }
+}
+
+// drag to pan; capture only once the pointer has really moved, so clicks still reach pictures
+let dragging=false,moved=false,down=false,sx,sy,sl,st;
+sc.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'||e.button!==0)return;
+  down=true;moved=false;sx=e.clientX;sy=e.clientY;sl=sc.scrollLeft;st=sc.scrollTop;
+});
+sc.addEventListener('pointermove',e=>{
+  if(!down)return;
+  const dx=e.clientX-sx,dy=e.clientY-sy;
+  if(!moved&&Math.abs(dx)+Math.abs(dy)>5){moved=true;dragging=true;sc.classList.add('dragging');sc.setPointerCapture(e.pointerId)}
+  if(moved){sc.scrollLeft=sl-dx;sc.scrollTop=st-dy}
+});
+const end=()=>{down=false;dragging=false;sc.classList.remove('dragging');setTimeout(()=>moved=false,0)};
+sc.addEventListener('pointerup',end);sc.addEventListener('pointercancel',end);
+
+// looking closely
+function openBox(it){
+  box.querySelector('img').src=it.el.src;
+  box.querySelector('span').textContent=groups[it.loc].every(i=>i.found)?it.loc:'';
+  box.classList.add('on');
+}
+box.addEventListener('click',()=>box.classList.remove('on'));
+
+// panels and sound
+const panel=$('panel'),art=panel.querySelector('article');
+for(const b of document.querySelectorAll('#menu [data-p]'))b.addEventListener('click',()=>{
+  art.innerHTML=$('t-'+b.dataset.p).innerHTML;panel.classList.add('on');
+});
+$('close').addEventListener('click',()=>panel.classList.remove('on'));
+addEventListener('keydown',e=>{if(e.key==='Escape'){box.classList.remove('on');panel.classList.remove('on')}});
+// sound: each recording belongs to a place and sits among that place's pictures,
+// found or not, so you can walk towards a sound before you can see where it comes from
+const SOUNDS=[{loc:'Shoreditch',file:'snd/shoreditch.mp3'}];
+const snd=$('snd');let ac=null,soundOn=false;
+async function startSound(){
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  const master=ac.createGain();master.gain.value=.9;master.connect(ac.destination);
+  for(const so of SOUNDS){
+    try{
+      const buf=await ac.decodeAudioData(await (await fetch(so.file)).arrayBuffer());
+      const src=ac.createBufferSource();src.buffer=buf;src.loop=true;
+      src.loopStart=.06;src.loopEnd=buf.duration-.06;   // step over encoder padding at either end
+      const g=ac.createGain();g.gain.value=0;
+      const pan=ac.createStereoPanner?ac.createStereoPanner():null;
+      src.connect(g);if(pan){g.connect(pan);pan.connect(master)}else g.connect(master);
+      src.start(0,Math.random()*(buf.duration-1));        // a different moment on every visit
+      Object.assign(so,{g,pan,pics:groups[so.loc]});
+    }catch(e){}
+  }
+}
+function placeSound(){
+  if(!ac||!soundOn)return;
+  const vw=sc.clientWidth,vh=sc.clientHeight,cx=(sc.scrollLeft+vw/2)/scale,cy=(sc.scrollTop+vh/2)/scale;
+  const R=Math.max(1500,Math.min(vw,vh)*2.2),t=ac.currentTime;
+  for(const so of SOUNDS){
+    if(!so.g)continue;
+    let near=null,dmin=1e9;
+    for(const it of so.pics){
+      const dx=Math.max(it.x-cx,0,cx-(it.x+it.w)),dy=Math.max(it.y-cy,0,cy-(it.y+it.h)),d=Math.hypot(dx,dy);
+      if(d<dmin){dmin=d;near=it}
+    }
+    // from above the wall every place is equally near: The Naked City leaves the distances out
+    const v=overview?.22:Math.max(0,1-dmin/R)**2;
+    so.g.gain.setTargetAtTime(v,t,.5);
+    if(so.pan&&near)so.pan.pan.setTargetAtTime(overview?0:Math.max(-.85,Math.min(.85,(near.cx-cx)/(vw*1.3/scale))),t,.5);
+  }
+}
+snd.addEventListener('click',async()=>{
+  if(!ac){snd.textContent='sound: loading';await startSound()}
+  soundOn=!soundOn;
+  if(soundOn){await ac.resume();placeSound()}else await ac.suspend();
+  snd.textContent=soundOn?'sound: on':'sound: off';
+});
+
+// the whole wall (a testing aid)
+let back={x:0,y:0};
+$('ov').addEventListener('click',e=>{
+  overview=!overview;world.classList.toggle('ov',overview);
+  if(overview){
+    back={x:sc.scrollLeft,y:sc.scrollTop};
+    const s=Math.min(sc.clientWidth/W,sc.clientHeight/H)*.96;
+    world.style.transform=`scale(${s})`;scale=s;world.style.setProperty('--s',(s*2.4).toFixed(4));
+    sizer.style.width=W*s+'px';sizer.style.height=H*s+'px';e.target.textContent='walk';
+  }else{
+    world.style.transform='';scale=1;world.style.removeProperty('--s');
+    sizer.style.width=W+'px';sizer.style.height=H+'px';
+    sc.scrollLeft=back.x;sc.scrollTop=back.y;e.target.textContent='whole wall';
+  }
+});
+
+// threshold
+sc.scrollLeft=start.cx-sc.clientWidth/2;sc.scrollTop=start.cy-sc.clientHeight/2;
+px=sc.scrollLeft;py=sc.scrollTop;
+$('enter').addEventListener('click',()=>{
+  document.body.classList.add('in');
+  setTimeout(()=>{find(start);live=true},900);
+});
+requestAnimationFrame(t=>{pt=t;tick(t)});
+}
+</script>
+</body>
+</html>
